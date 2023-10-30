@@ -1,0 +1,27 @@
+autoencoder_ckpt: 'result/checkpoints/autoencoder/DEFAULT/own_dataset/lightning_logs/version_0/checkpoints/latest_checkpoint.ckpt' 
+# Have to be derived from autoencoder Latent space dimensions
+diffusion_img_size: 48
+diffusion_depth_size: 48
+diffusion_num_channels: 8
+dim_mults: [1,2,4,8]
+results_folder: ./result/checkpoints/ddpm/
+results_folder_postfix: 'own_dataset'
+load_milestone: False
+
+batch_size: 2
+num_workers: 4
+logger: wandb
+objective: pred_x0
+save_and_sample_every: 1000
+denoising_fn: Unet3D
+train_lr: 1e-4
+timesteps: 300 # number of steps
+sampling_timesteps: 250 # number of sampling timesteps (using ddim for faster inference [see citation for ddim paper])
+loss_type: l1 # L1 or L2
+train_num_steps: 700000 # total training steps
+gradient_accumulate_every: 2 # gradient accumulation steps
+ema_decay: 0.995 # exponential moving average decay
+amp: False # turn on mixed precision
+num_sample_rows: 1
+gpus: 0
+
