@@ -1,7 +1,6 @@
-# PET-diffusion: Unsupervised PET Enhancement based on the Latent Diffusion Model
+## Incomplete Code: Improvements Coming Soon
 
-This repository contains the code of our paper "PET-diffusion: Unsupervised PET Enhancement based on the Latent Diffusion Model"
-(see https://link.springer.com/chapter/10.1007/978-3-031-43907-0_1).
+# PET-diffusion: Unsupervised PET Enhancement based on the Latent Diffusion Model (see https://link.springer.com/chapter/10.1007/978-3-031-43907-0_1)
 
 ![Overview of the framework](img/fig1_V3.png)
 
