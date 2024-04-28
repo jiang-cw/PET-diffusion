@@ -1,8 +1,0 @@
-defaults:
-  - dataset: default 
-  - model: autoencoder 
-
-
-
-
- 
