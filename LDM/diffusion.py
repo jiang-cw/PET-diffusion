@@ -738,11 +738,13 @@ class Diffusion:
         if noise is None:
             noise = torch.randn_like(y)
         t = torch.tensor([self.noise_steps-1,] * y.shape[0], device=y.device).long()
-        return y + _extract_into_tensor(self.kappa * self.sqrt_etas, t, y.shape) * noise
+        noise_image = self.add_poisson_noise_in_projection(y, scale=torch.tensor(1.0, device=y.device))
+        return y + _extract_into_tensor(self.kappa * self.sqrt_etas, t, y.shape) * noise_image
     
     def p_sample(self, model, x, y, t, cond, clip_denoised=True):
         mean, log_variance = self.p_mean_variance(model, x, y, t, cond, clip_denoised=clip_denoised)
-        noise = torch.randn_like(x)
+        # noise = torch.randn_like(x)
+        noise = self.add_poisson_noise_in_projection(x, scale=torch.exp(0.5 * log_variance))
         nonzero_mask = ((t != 0).float().view(-1, *([1] * (len(x.shape) - 1))))  # no noise when t == 0
         sample = mean + nonzero_mask * torch.exp(0.5 * log_variance) * noise
         return sample
@@ -758,87 +760,7 @@ class Diffusion:
                 y_sample = self.p_sample(model, y_sample, y, t, cond, clip_denoised=clip_denoised)
         return y_sample
 
-#CLIP
-def get_optim_params(model_name: str):
-    if model_name in ['ViT-B/32', 'ViT-B/16']:
-        return ['visual.transformer.resblocks.11.attn.in_proj_weight',
-                'visual.transformer.resblocks.11.attn.in_proj_bias',
-                'visual.transformer.resblocks.11.attn.out_proj.weight',
-                'visual.transformer.resblocks.11.attn.out_proj.bias',
-                'visual.transformer.resblocks.11.ln_1.weight',
-                'visual.transformer.resblocks.11.ln_1.bias',
-                'visual.transformer.resblocks.11.mlp.c_fc.weight',
-                'visual.transformer.resblocks.11.mlp.c_fc.bias',
-                'visual.transformer.resblocks.11.mlp.c_proj.weight',
-                'visual.transformer.resblocks.11.mlp.c_proj.bias',
-                'visual.transformer.resblocks.11.ln_2.weight',
-                'visual.transformer.resblocks.11.ln_2.bias',
-                'visual.ln_post.weight',
-                'visual.ln_post.bias',
-                'visual.proj',
-                'transformer.resblocks.11.attn.in_proj_weight',
-                'transformer.resblocks.11.attn.in_proj_bias',
-                'transformer.resblocks.11.attn.out_proj.weight',
-                'transformer.resblocks.11.attn.out_proj.bias',
-                'transformer.resblocks.11.ln_1.weight',
-                'transformer.resblocks.11.ln_1.bias',
-                'transformer.resblocks.11.mlp.c_fc.weight',
-                'transformer.resblocks.11.mlp.c_fc.bias',
-                'transformer.resblocks.11.mlp.c_proj.weight',
-                'transformer.resblocks.11.mlp.c_proj.bias',
-                'transformer.resblocks.11.ln_2.weight',
-                'transformer.resblocks.11.ln_2.bias',
-                'ln_final.weight',
-                'ln_final.bias',
-                'text_projection']
-    elif model_name in ['ViT-L/14', 'ViT-L/14@336px']:
-        return ['visual.transformer.resblocks.23.attn.in_proj_weight',
-                'visual.transformer.resblocks.23.attn.in_proj_bias',
-                'visual.transformer.resblocks.23.attn.out_proj.weight',
-                'visual.transformer.resblocks.23.attn.out_proj.bias',
-                'visual.transformer.resblocks.23.ln_1.weight',
-                'visual.transformer.resblocks.23.ln_1.bias',
-                'visual.transformer.resblocks.23.mlp.c_fc.weight',
-                'visual.transformer.resblocks.23.mlp.c_fc.bias',
-                'visual.transformer.resblocks.23.mlp.c_proj.weight',
-                'visual.transformer.resblocks.23.mlp.c_proj.bias',
-                'visual.transformer.resblocks.23.ln_2.weight',
-                'visual.transformer.resblocks.23.ln_2.bias',
-                'visual.ln_post.weight',
-                'visual.ln_post.bias',
-                'visual.proj',
-                'transformer.resblocks.11.attn.in_proj_weight',
-                'transformer.resblocks.11.attn.in_proj_bias',
-                'transformer.resblocks.11.attn.out_proj.weight',
-                'transformer.resblocks.11.attn.out_proj.bias',
-                'transformer.resblocks.11.ln_1.weight',
-                'transformer.resblocks.11.ln_1.bias',
-                'transformer.resblocks.11.mlp.c_fc.weight',
-                'transformer.resblocks.11.mlp.c_fc.bias',
-                'transformer.resblocks.11.mlp.c_proj.weight',
-                'transformer.resblocks.11.mlp.c_proj.bias',
-                'transformer.resblocks.11.ln_2.weight',
-                'transformer.resblocks.11.ln_2.bias',
-                'ln_final.weight',
-                'ln_final.bias',
-                'text_projection']
-    else:
-        print(f"no {model_name}")
 
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        self.model, self.preprocess = clip.load('ViT-B/32', 'cpu')
-
-        self.optim_params = get_optim_params('ViT-B/32')
-
-        for name, param in self.model.named_parameters():
-            if name not in self.optim_params:
-                param.requires_grad = False
-
-    def forward(self, text):
-        text_features = self.model.encode_text(text)
-        return text_features
 
 if __name__ == "__main__":
     #x = torch.randn((1, 1, 40, 48, 40))
