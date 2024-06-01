@@ -350,31 +350,47 @@ class QKVAttention(nn.Module):
         return count_flops_attn(model, _x, y)
 
 
-class CrossAttentionBlock(nn.Module):
-    def __init__(self, channels, num_heads, num_head_channels, condition_dim):
-        super(CrossAttentionBlock, self).__init__()
-        self.num_heads = num_heads
-        self.scale = (num_head_channels // num_heads) ** -0.5
+class CrossAttention(nn.Module):
+    def __init__(self, dim, heads=8):
+        super().__init__()
+        self.dim = dim
+        self.heads = heads
+        self.scale = dim ** -0.5
+
+        self.query = nn.Linear(dim, dim)
+        self.key = nn.Linear(dim, dim)
+        self.value = nn.Linear(dim, dim)
+
+    def forward(self, x, y):
+        b, c, d, h, w = x.shape  
+        hds = self.heads
+
+        print(x.shape)
+        print(y.shape)
         
-        self.to_qk = nn.Linear(condition_dim, 2 * num_heads * num_head_channels, bias=False)
-        self.to_v = nn.Linear(channels, num_heads * num_head_channels, bias=False)
+   
+        y = y.view(b, c, -1)  
+        y = y.permute(0, 2, 1)  
         
-        self.unifyheads = nn.Linear(num_heads * num_head_channels, channels)
-        
-    def forward(self, x, condition):
-        b, t, _, h = *x.shape, self.num_heads
-        
-        qk = self.to_qk(condition).chunk(2, dim=-1)
-        q, k = map(lambda t: t.reshape(b, t.shape[1], h, -1).transpose(1, 2), qk)
-        v = self.to_v(x).reshape(b, t, h, -1).transpose(1, 2)
-        
-        q *= self.scale
-        dots = torch.einsum('bhid,bhjd->bhij', q, k)
-        attn = F.softmax(dots, dim=-1)
-        
-        out = torch.einsum('bhij,bhjd->bhid', attn, v)
-        out = out.transpose(1, 2).reshape(b, t, -1)
-        return self.unifyheads(out)
+      
+        x = x.view(b, c, -1).permute(0, 2, 1)
+
+        queries = self.query(y)
+        keys = self.key(y)
+        values = self.value(x)
+
+        queries = queries.view(b, -1, hds, self.dim // hds).transpose(1, 2)  
+        keys = keys.view(b, -1, hds, self.dim // hds).transpose(1, 2)  
+        values = values.view(b, -1, hds, self.dim // hds).transpose(1, 2)  
+
+        queries *= self.scale
+        dots = torch.einsum('bhid,bhjd->bhij', queries, keys)
+        attn = dots.softmax(dim=-1)
+
+        out = torch.einsum('bhij,bhjd->bhid', attn, values)
+        out = out.transpose(1, 2).contiguous().view(b, c, d, h, w)
+        return out
+
 
 class UNet(nn.Module):
     def __init__(
@@ -419,8 +435,6 @@ class UNet(nn.Module):
         self.num_heads = num_heads
         self.num_head_channels = num_head_channels
         self.num_heads_upsample = num_heads_upsample
-        self.cross_attention = CrossAttentionBlock(channels=ch, num_heads=num_heads, num_head_channels=num_head_channels, condition_dim=time_embed_dim)
-
 
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential(
@@ -507,7 +521,7 @@ class UNet(nn.Module):
                 num_head_channels=num_head_channels,
                 use_new_attention_order=use_new_attention_order,
             ),
-            # CrossAttention(ch),
+            CrossAttention(ch),
             ResBlock(
                 ch,
                 time_embed_dim,
@@ -572,10 +586,8 @@ class UNet(nn.Module):
             nn.Tanh()
         )
 
-    def forward(self, x, timesteps, condition):
+    def forward(self, x, timesteps, y):
         # assert (y is not None) == (self.num_classes is not None)
-
-        x = self.cross_attention(x, condition)
 
         hs = []
         emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
@@ -589,8 +601,8 @@ class UNet(nn.Module):
             h = module(h, emb)
             hs.append(h)
         for module in self.middle_block:
-            # if isinstance(module, CrossAttention):
-            #     h = module(h, y)
+            if isinstance(module, CrossAttention):
+                h = module(h, y)
             if isinstance(module, AttentionBlock):
                 h = module(h)
             else:
