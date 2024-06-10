@@ -3,10 +3,6 @@
 This repo contains the supported pytorch code and configuration files of our work
 
 
-![Overview of the framework](img/fig1_V3.png)
-
-# System Requirements
-This code has been tested on Ubuntu 20.04 and an NVIDIA Tesla A100 GPU. Furthermore it was developed using Python v3.8. 
 
 
 # Model Training
